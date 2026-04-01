@@ -493,12 +493,19 @@ document.addEventListener('keydown',e=>{if(e.key==='Enter'&&!document.getElement
 
 // ── DATA ───────────────────────────────────────────────
 async function loadAllData(){
-  const[pRes,mRes]=await Promise.all([
+  const[pRes,mRes,profRes]=await Promise.all([
     supa.from('plants').select('*').order('created_at'),
-    supa.from('measures').select('*').order('date',{ascending:false})
+    supa.from('measures').select('*').order('date',{ascending:false}),
+    supa.from('profiles').select('groq_api_key').eq('id',currentUser.id).single()
   ]);
   plants=(pRes.data||[]).map(mapPlant);
   measures=(mRes.data||[]).map(mapMeasure);
+
+  // Sincroniza API key do Supabase para localStorage
+  if(profRes.data?.groq_api_key){
+    localStorage.setItem(APIKEY_KEY, profRes.data.groq_api_key);
+  }
+
   renderPlants(); renderApikeyBanner();
 }
 function mapPlant(r){return{id:r.id,emoji:r.emoji,nickname:r.nickname,species:r.species,location:r.location,aiInfo:r.ai_info,lastMeasure:r.last_measure,measureCount:r.measure_count||0,createdAt:r.created_at};}
@@ -506,8 +513,23 @@ function mapMeasure(r){return{id:r.id,plantId:r.plant_id,date:r.date||r.created_
 
 // ── API KEY ────────────────────────────────────────────
 function getApiKey(){return localStorage.getItem(APIKEY_KEY)||'';}
-function saveApiKey(){const v=document.getElementById('apikey-input').value.trim();if(!v||v.length<10){showToast('❌ Chave inválida.');return;}localStorage.setItem(APIKEY_KEY,v);renderApikeyBanner();showToast('🔑 Chave salva!');}
-function resetApiKey(){localStorage.removeItem(APIKEY_KEY);renderApikeyBanner();}
+
+async function saveApiKey(){
+  const v=document.getElementById('apikey-input').value.trim();
+  if(!v||v.length<10){showToast('❌ Chave inválida.');return;}
+  showLoading('Salvando chave…');
+  const{error}=await supa.from('profiles').upsert({id:currentUser.id,groq_api_key:v,updated_at:new Date().toISOString()});
+  hideLoading();
+  if(error){showToast('❌ Erro ao salvar: '+error.message);return;}
+  localStorage.setItem(APIKEY_KEY,v);
+  renderApikeyBanner();showToast('🔑 Chave salva em todos os dispositivos!');
+}
+
+function resetApiKey(){
+  supa.from('profiles').upsert({id:currentUser.id,groq_api_key:null,updated_at:new Date().toISOString()});
+  localStorage.removeItem(APIKEY_KEY);
+  renderApikeyBanner();
+}
 function renderApikeyBanner(){
   const key=getApiKey(),b=document.getElementById('apikey-banner');
   if(!b)return;
