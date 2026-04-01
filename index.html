@@ -477,25 +477,34 @@ function translateErr(m){
 }
 async function logout(){if(!confirm('Sair do PlantCare?'))return;await supa.auth.signOut();}
 
-let appLoading = false;
-
-supa.auth.onAuthStateChange(async(event,session)=>{
-  if(session?.user){
-    if(appLoading) return; // evita dupla execução
-    appLoading = true;
-    currentUser=session.user;
+// ── INIT ───────────────────────────────────────────────
+(async () => {
+  const { data: { session } } = await supa.auth.getSession();
+  if (session?.user) {
+    currentUser = session.user;
     document.getElementById('auth-screen').classList.add('hidden');
     showLoading('Carregando suas plantas…');
     await loadAllData();
     hideLoading();
-    appLoading = false;
   } else {
-    currentUser=null; plants=[]; measures=[];
-    appLoading = false;
-    hideLoading();
     document.getElementById('auth-screen').classList.remove('hidden');
   }
-});
+
+  // Monitora mudanças (login/logout) após init
+  supa.auth.onAuthStateChange(async (event, session) => {
+    if (event === 'SIGNED_IN' && !currentUser) {
+      currentUser = session.user;
+      document.getElementById('auth-screen').classList.add('hidden');
+      showLoading('Carregando suas plantas…');
+      await loadAllData();
+      hideLoading();
+    } else if (event === 'SIGNED_OUT') {
+      currentUser = null; plants = []; measures = [];
+      hideLoading();
+      document.getElementById('auth-screen').classList.remove('hidden');
+    }
+  });
+})();
 document.addEventListener('keydown',e=>{if(e.key==='Enter'&&!document.getElementById('auth-screen').classList.contains('hidden'))submitAuth();});
 
 // ── DATA ───────────────────────────────────────────────
