@@ -477,15 +477,21 @@ function translateErr(m){
 }
 async function logout(){if(!confirm('Sair do PlantCare?'))return;await supa.auth.signOut();}
 
+let appLoading = false;
+
 supa.auth.onAuthStateChange(async(event,session)=>{
   if(session?.user){
+    if(appLoading) return; // evita dupla execução
+    appLoading = true;
     currentUser=session.user;
     document.getElementById('auth-screen').classList.add('hidden');
     showLoading('Carregando suas plantas…');
     await loadAllData();
     hideLoading();
+    appLoading = false;
   } else {
     currentUser=null; plants=[]; measures=[];
+    appLoading = false;
     hideLoading();
     document.getElementById('auth-screen').classList.remove('hidden');
   }
