@@ -486,6 +486,7 @@ supa.auth.onAuthStateChange(async(event,session)=>{
     hideLoading();
   } else {
     currentUser=null; plants=[]; measures=[];
+    hideLoading();
     document.getElementById('auth-screen').classList.remove('hidden');
   }
 });
@@ -493,20 +494,30 @@ document.addEventListener('keydown',e=>{if(e.key==='Enter'&&!document.getElement
 
 // ── DATA ───────────────────────────────────────────────
 async function loadAllData(){
-  const[pRes,mRes,profRes]=await Promise.all([
-    supa.from('plants').select('*').order('created_at'),
-    supa.from('measures').select('*').order('date',{ascending:false}),
-    supa.from('profiles').select('groq_api_key').eq('id',currentUser.id).maybeSingle()
-  ]);
-  plants=(pRes.data||[]).map(mapPlant);
-  measures=(mRes.data||[]).map(mapMeasure);
+  try {
+    const[pRes,mRes,profRes]=await Promise.all([
+      supa.from('plants').select('*').order('created_at'),
+      supa.from('measures').select('*').order('date',{ascending:false}),
+      supa.from('profiles').select('groq_api_key').eq('id',currentUser.id).maybeSingle()
+    ]);
 
-  // Sincroniza API key do Supabase para localStorage (ignora se perfil não existir)
-  if(profRes.data?.groq_api_key){
-    localStorage.setItem(APIKEY_KEY, profRes.data.groq_api_key);
+    if(pRes.error) console.error('plants error:', pRes.error);
+    if(mRes.error) console.error('measures error:', mRes.error);
+
+    plants=(pRes.data||[]).map(mapPlant);
+    measures=(mRes.data||[]).map(mapMeasure);
+
+    if(profRes.data?.groq_api_key){
+      localStorage.setItem(APIKEY_KEY, profRes.data.groq_api_key);
+    }
+  } catch(e) {
+    console.error('loadAllData error:', e);
+    showToast('⚠️ Erro ao carregar dados: ' + e.message);
+  } finally {
+    // sempre esconde o loading e renderiza, mesmo com erro
+    renderPlants();
+    renderApikeyBanner();
   }
-
-  renderPlants(); renderApikeyBanner();
 }
 function mapPlant(r){return{id:r.id,emoji:r.emoji,nickname:r.nickname,species:r.species,location:r.location,aiInfo:r.ai_info,lastMeasure:r.last_measure,measureCount:r.measure_count||0,createdAt:r.created_at};}
 function mapMeasure(r){return{id:r.id,plantId:r.plant_id,date:r.date||r.created_at,umidade:r.umidade,ph:r.ph,temp:r.temp,luz:r.luz,obs:r.obs,params:r.params,aiText:r.ai_text,photo:r.photo};}
